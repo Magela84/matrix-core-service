@@ -1,0 +1,135 @@
+# ============================================================
+# AZURE APP SERVICE CI/CD PIPELINE
+#
+# Purpose:
+# Deploy the matrix-core-service Node.js application
+# from GitHub to Azure App Service.
+#
+# Flow:
+# GitHub -> GitHub Actions -> Node.js -> Azure OIDC
+# -> Azure App Service
+# ============================================================
+
+name: "Deploy Node.js to Azure App Service"
+
+
+# ------------------------------------------------------------
+# TRIGGER
+#
+# Run this pipeline whenever code is pushed to main.
+# ------------------------------------------------------------
+
+on:
+  push:
+    branches:
+      - main
+
+
+# ------------------------------------------------------------
+# PERMISSIONS
+#
+# contents: read
+#   Allows GitHub Actions to read the repository.
+#
+# id-token: write
+#   Allows GitHub Actions to request an OIDC token
+#   for Microsoft Entra ID authentication.
+# ------------------------------------------------------------
+
+permissions:
+  contents: read
+  id-token: write
+
+
+# ============================================================
+# DEPLOYMENT JOB
+# ============================================================
+
+jobs:
+
+  deploy:
+
+    name: "Build and Deploy to App Service"
+
+    # GitHub-hosted Linux machine
+    runs-on: ubuntu-latest
+
+
+    steps:
+
+      # --------------------------------------------------------
+      # STEP 1: CHECKOUT APPLICATION
+      #
+      # Downloads matrix-core-service onto the GitHub runner.
+      # --------------------------------------------------------
+
+      - name: Checkout Application
+        uses: actions/checkout@v4
+
+
+      # --------------------------------------------------------
+      # STEP 2: SET UP NODE.JS
+      #
+      # Azure App Service is configured for Node.js 24 LTS.
+      # --------------------------------------------------------
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+
+      # --------------------------------------------------------
+      # STEP 3: INSTALL DEPENDENCIES
+      #
+      # Installs packages defined in package.json.
+      # --------------------------------------------------------
+
+      - name: Install Dependencies
+        run: npm install
+
+
+      # --------------------------------------------------------
+      # STEP 4: TEST APPLICATION STARTUP FILE
+      #
+      # Confirms Node.js can check server.js for syntax errors.
+      # --------------------------------------------------------
+
+      - name: Validate Application
+        run: node --check server.js
+
+
+      # --------------------------------------------------------
+      # STEP 5: AZURE LOGIN USING OIDC
+      #
+      # No Azure password/client secret is stored in GitHub.
+      #
+      # GitHub Actions
+      #       ↓
+      # OIDC Token
+      #       ↓
+      # Microsoft Entra ID
+      #       ↓
+      # Azure
+      # --------------------------------------------------------
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+
+      # --------------------------------------------------------
+      # STEP 6: DEPLOY TO AZURE APP SERVICE
+      #
+      # Azure App Service:
+      # magela-appservice-demo
+      # --------------------------------------------------------
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: "magela-appservice-demo"
+          package: "."
